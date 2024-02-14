@@ -424,8 +424,7 @@ def calc_sa_sec_U_backw(sim_setup,gMatrix,T_ins,M_qf,T_borehole,BHEs,T_borehole_
 
 	return Tf_ins,Tf_outs,loads
 
-
-def calc_sa_sec_U_backw_load(sim_setup,gMatrix,M_qf,field_load,T_borehole,BHEs,Tmean_out_old):
+def calc_sa_sec_U_backw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tmean_out_old):
 
 	'''
 	semi-analytical model for backward euler U-type BHE	with load as BC
