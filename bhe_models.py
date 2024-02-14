@@ -1237,6 +1237,7 @@ class BHE_1U_expl:
 		
 		# Flow velocity
 		self.u = BheData['Qf']/(np.pi*self.rpi**2)
+		self.Qold = BheData['Qf']
 		self.maxVel = self.u 
 	
 		# Flow parameters
@@ -1337,6 +1338,58 @@ class BHE_1U_expl:
 			self.Q_cond[0] = self.alt_T_grout_out[1] - self.alt_T_grout_out[0]
 			self.Q_cond[-1] = self.alt_T_grout_out[-2] - self.alt_T_grout_out[-1]
 			self.T_grout_out = self.alt_T_grout_out + self.F3F8 * self.Q_cond + self.F3F1 * (self.TsA - self.alt_T_grout_out) + self.F3F2 * (self.alt_Tf_out - self.alt_T_grout_out) +  self.F3F4 * (self.alt_T_grout_in - self.alt_T_grout_out)
+			
+			# Berechnung fluid in
+			self.Phi_w = np.take(self.alt_Tf_in,self.idxPlus)
+			self.Phi_w[0] = T_in
+			self.Tf_in = self.alt_Tf_in + self.F5 * (self.Phi_w - self.alt_Tf_in) + self.F6F2 * (self.alt_T_grout_in - self.alt_Tf_in)
+			
+			# Berechnung fluid out	
+			self.Phi_w = np.take(self.alt_Tf_out,self.idxMinus)
+			self.Phi_w[-1] = self.alt_Tf_in[-1]
+			self.Tf_out = self.alt_Tf_out + self.F5 * (self.Phi_w - self.alt_Tf_out) + self.F6F2 * (self.alt_T_grout_out - self.alt_Tf_out)
+
+			# Rückschreiben
+			self.alt_T_grout_in[:] = self.T_grout_in[:]
+			self.alt_T_grout_out[:] = self.T_grout_out[:]
+			self.alt_Tf_in[:] = self.Tf_in[:]
+			self.alt_Tf_out[:] = self.Tf_out[:]
+		return True
+
+	def calcSondeFlowQ(self,tfinal,T_in,Q):			
+		#if Q != self.Qold:		
+		if Q > self.Qold*1.05 or Q < self.Qold*0.95:		
+			self.Qold = Q	
+
+			# Flow velocity
+			self.u = self.Qold/(2*np.pi*self.rpi**2)
+			
+			# Flow parameters
+			self.Pr = self.dynviscF*self.capF/self.densF/self.lmF
+			self.Re = self.u*self.dpi/(self.dynviscF/self.densF)
+			self.Nu = Nusselt2U (self.Re,self.Pr,self.rpi,self.length)
+			self.Radv  = 1/(self.Nu*self.lmF*np.pi)			
+			self.Rfg = self.Radv + self.Rcona + self.Rconb
+			
+			# Variables Flow					
+			self.F2 = self.dz/self.Rfg
+			self.F5 = self.dt/self.dz*self.u			
+			self.F6F2 = self.F6*self.F2
+			self.F3F2 = self.F3*self.F2
+		
+		
+		for i in range(0,tfinal):
+			# Berechnung grout in
+			self.Q_cond = np.take(self.alt_T_grout_in,self.idxMinus) - 2*self.alt_T_grout_in + np.take(self.alt_T_grout_in,self.idxPlus)
+			self.Q_cond[0] = self.alt_T_grout_in[1] - self.alt_T_grout_in[0]
+			self.Q_cond[-1] = self.alt_T_grout_in[-2] - self.alt_T_grout_in[-1]
+			self.T_grout_in = self.alt_T_grout_in + self.F3F8 * self.Q_cond + self.F3F1 * (self.TsA - self.alt_T_grout_in) + self.F3F2 * (self.alt_Tf_in - self.alt_T_grout_in) + 2 * self.F3F4 * (self.alt_T_grout_out - self.alt_T_grout_in)
+			
+			# Berechnung grout out
+			self.Q_cond = np.take(self.alt_T_grout_out,self.idxMinus) - 2*self.alt_T_grout_out + np.take(self.alt_T_grout_out,self.idxPlus)
+			self.Q_cond[0] = self.alt_T_grout_out[1] - self.alt_T_grout_out[0]
+			self.Q_cond[-1] = self.alt_T_grout_out[-2] - self.alt_T_grout_out[-1]
+			self.T_grout_out = self.alt_T_grout_out + self.F3F8 * self.Q_cond + self.F3F1 * (self.TsA - self.alt_T_grout_out) + self.F3F2 * (self.alt_Tf_out - self.alt_T_grout_out) + 2 * self.F3F4 * (self.alt_T_grout_in - self.alt_T_grout_out)
 			
 			# Berechnung fluid in
 			self.Phi_w = np.take(self.alt_Tf_in,self.idxPlus)
