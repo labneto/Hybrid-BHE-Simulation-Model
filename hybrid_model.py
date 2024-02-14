@@ -226,7 +226,7 @@ def calc_sa_sec_U_forw(sim_setup,gMatrix,T_ins,M_qf,T_borehole,BHEs,T_borehole_i
 				T_borehole[k][i:nSteps_soil] -= (loads[j][i]-loads[j][i-1]) * gMatrix[j,k,0:nSteps_soil-i]
 
 				
-		#print('step ' + str(i) + ' von ' + str(nSteps_soil))	
+		#print('step ' + str(i) + ' von ' + str(nSteps_soil))
 		
 		
 	for m in range(0,nBhe):
@@ -234,6 +234,196 @@ def calc_sa_sec_U_forw(sim_setup,gMatrix,T_ins,M_qf,T_borehole,BHEs,T_borehole_i
 
 	return Tf_ins,Tf_outs,loads
 
+def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tmean_out_old):
+	
+	'''
+	semi-analytical model for forward euler U-type BHE	
+	inputs: sim_setup = dict with setup information
+			gMatrix = Array with gfunctions
+			Tins = List with inlet temperatures for each bhe for each time step [°C]
+			M_qf = List with flow rates for each bhe for each time step [m³/s]
+			T_borehole = Array with ground temperatures for each BHE
+			BHEs = list with BHE classes
+			T_borehole_ini = Array with initial groundtemperatures for the first time step
+	'''
+	
+	
+	nBhe = len(BHEs)												# number of bhe
+	nSteps_soil = sim_setup['nt_part']								# soil steps per part
+	Sondensteps = int(sim_setup['dt_soil']/sim_setup['dt_bhe'])		# bhe steps per soil step
+	bhe_steps_inv = 1./Sondensteps
+	nBhe_inv = 1./nBhe
+
+	
+	# load Setup
+	loads = [np.zeros(nSteps_soil) for i in range(nBhe)]
+	pcV_inv = 1/(nBhe*BHEs[0].Qold*BHEs[0].capF)
+
+	# Results Setup	
+	Tf_outs = [np.zeros(nSteps_soil) for i in range(nBhe)]
+	Tf_ins = np.zeros(nSteps_soil)#[np.zeros(nSteps_soil) for i in range(nBhe)]
+	Tg_means = [np.zeros(nSteps_soil) for i in range(nBhe)]
+	Tf_out_mean = np.zeros(nSteps_soil)
+	
+	# temporary variables 
+	Tf_in_ini = [np.zeros(BHEs[i].Tf_in.size) for i in range(nBhe)]
+	Tf_out_ini = [np.zeros(BHEs[i].Tf_out.size) for i in range(nBhe)]
+	Tg_in_ini = [np.zeros(BHEs[i].T_grout_in.size) for i in range(nBhe)]
+	Tg_out_ini = [np.zeros(BHEs[i].T_grout_out.size) for i in range(nBhe)]
+	
+	# -------------------------------------------------------------------------
+	# first step
+	# -------------------------------------------------------------------------
+	i = 0
+	T_in = Tmean_out_old - field_load[i]*pcV_inv
+	Tf_ins[i] = T_in
+	for m in range(0,nBhe):
+
+		# save current state of bhe model
+		Tf_in_ini[m][:] = BHEs[m].Tf_in[:]
+		Tf_out_ini[m][:] = BHEs[m].Tf_out[:]
+		Tg_in_ini[m][:] = BHEs[m].T_grout_in[:]
+		Tg_out_ini[m][:] = BHEs[m].T_grout_out[:]
+	
+		
+		# First Guess	
+		# Calc BHE numerical
+		BHEs[m].setSoilBC(T_borehole[m][0])	
+		Tg_m = 0
+		for n in range(0,Sondensteps):		
+
+			if M_qf[m][i] > 0:
+				BHEs[m].calcSondeFlowQ(1,T_in,M_qf[m][i])
+			else:
+				BHEs[m].calcSondeNoFlow(1)	
+			
+			
+			Tg_m += bhe_steps_inv * BHEs[m].getGroutBC()		
+		
+		Tf_outs[m][i] = BHEs[m].getFluidOut()	
+		load_fg = (T_borehole[m][0]-Tg_m)*BHEs[m].Rgs_coupling
+		Tb_guess = T_borehole[m][i] - (load_fg-0) * gMatrix[m][m][0]	
+		loads[m][i] = load_fg
+		
+		error = np.inf
+		while error > sim_setup['error']:
+		
+			# Sonde zurücksetzen!
+			BHEs[m].alt_T_grout_in[:]  = Tg_in_ini[m][:]
+			BHEs[m].alt_T_grout_out[:] = Tg_out_ini[m][:]
+			BHEs[m].alt_Tf_in[:] = Tf_in_ini[m][:]
+			BHEs[m].alt_Tf_out[:] = Tf_out_ini[m][:]
+			
+			
+			# Calc BHE numerical
+			Tf_out_old = BHEs[m].getFluidOut()	
+			BHEs[m].setSoilBC(Tb_guess)
+			Tg_m = 0
+			for n in range(0,Sondensteps):
+				
+				if M_qf[m][i] > 0:
+					BHEs[m].calcSondeFlowQ(1,T_in,M_qf[m][i])
+				else:
+					BHEs[m].calcSondeNoFlow(1)
+					
+				
+				Tg_m += bhe_steps_inv * BHEs[m].getGroutBC()		
+			
+			Tf_outs[m][i] = BHEs[m].getFluidOut()
+			load_fg = (Tb_guess-Tg_m)*BHEs[m].Rgs_coupling
+			loads[m][i] = load_fg
+			Tb_guess = T_borehole[m][i] - (loads[m][i]-0) * gMatrix[m][m][0]	
+			error = np.abs((BHEs[m].getFluidOut() - Tf_out_old)/Tf_out_old)
+		Tf_out_mean[i] += nBhe_inv * Tf_outs[m][i]
+
+	
+	# Calc Soil 
+	for j in range(0,nBhe):		
+		for k in range(0,nBhe):				
+			T_borehole[k][i:nSteps_soil] -= (loads[j][i]-loads[j][i-1]) * gMatrix[j,k,0:nSteps_soil-i]
+	
+	#print('step ' + str(i) + ' von ' + str(nSteps_soil))
+	
+
+	
+	
+	# -------------------------------------------------------------------------
+	# following steps
+	# -------------------------------------------------------------------------
+	
+	for i in range(1,nSteps_soil):
+		T_in = Tf_out_mean[i-1] - field_load[i]*pcV_inv
+		Tf_ins[i] = T_in
+		for m in range(0,nBhe):
+			# save current state of bhe model
+			Tf_in_ini[m][:] = BHEs[m].Tf_in[:]
+			Tf_out_ini[m][:] = BHEs[m].Tf_out[:]
+			Tg_in_ini[m][:] = BHEs[m].T_grout_in[:]
+			Tg_out_ini[m][:] = BHEs[m].T_grout_out[:]
+		
+			
+
+			# First Guess	
+			# Calc BHE numerical
+			BHEs[m].setSoilBC(T_borehole[m][i-1])																	
+			Tg_m = 0
+			for n in range(0,Sondensteps):
+				
+				if M_qf[m][i] > 0:
+					BHEs[m].calcSondeFlowQ(1,T_in,M_qf[m][i])
+				else:
+					BHEs[m].calcSondeNoFlow(1)
+								
+				Tg_m += bhe_steps_inv * BHEs[m].getGroutBC()			
+			
+			Tf_outs[m][i] = BHEs[m].getFluidOut()	
+			load_fg = (T_borehole[m][i-1]-Tg_m)*BHEs[m].Rgs_coupling
+			Tb_guess = T_borehole[m][i] - (load_fg-loads[m][i-1]) * gMatrix[m][m][0]
+			loads[m][i] = load_fg
+			
+			error = np.inf
+			while error > sim_setup['error']:
+			
+				# Sonde zurücksetzen!
+				BHEs[m].alt_T_grout_in[:]  = Tg_in_ini[m][:]
+				BHEs[m].alt_T_grout_out[:] = Tg_out_ini[m][:]
+				BHEs[m].alt_Tf_in[:] = Tf_in_ini[m][:]
+				BHEs[m].alt_Tf_out[:] = Tf_out_ini[m][:]
+				
+				
+				# Calc BHE numerical
+				Tf_out_old = BHEs[m].getFluidOut()	
+				BHEs[m].setSoilBC(Tb_guess)
+				Tg_m = 0
+				for n in range(0,Sondensteps):
+					
+					if M_qf[m][i] > 0:
+						BHEs[m].calcSondeFlowQ(1,T_in,M_qf[m][i])
+					else:
+						BHEs[m].calcSondeNoFlow(1)
+						
+					
+					Tg_m += bhe_steps_inv * BHEs[m].getGroutBC()			
+				
+				Tf_outs[m][i] = BHEs[m].getFluidOut()
+				load_fg = (Tb_guess-Tg_m)*BHEs[m].Rgs_coupling
+				loads[m][i] = load_fg
+				Tb_guess = T_borehole[m][i] - (loads[m][i]-loads[m][i-1]) * gMatrix[m][m][0]	
+				error = np.abs((BHEs[m].getFluidOut() - Tf_out_old)/Tf_out_old)
+		
+			Tf_out_mean[i] += nBhe_inv * Tf_outs[m][i]
+		# Calc Soil 
+		for j in range(0,nBhe):		
+			for k in range(0,nBhe):				
+				T_borehole[k][i:nSteps_soil] -= (loads[j][i]-loads[j][i-1]) * gMatrix[j,k,0:nSteps_soil-i]
+
+				
+		#print('step ' + str(i) + ' von ' + str(nSteps_soil))	
+		
+		
+
+
+	return Tf_ins,Tf_outs,loads
 
 def calc_sa_sec_U_backw(sim_setup,gMatrix,T_ins,M_qf,T_borehole,BHEs,T_borehole_ini):
 	

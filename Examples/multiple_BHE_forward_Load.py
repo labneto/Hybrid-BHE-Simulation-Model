@@ -52,7 +52,7 @@ def main():
 				'nt_part':	14880,			# soil time steps per period
 				'n_parts':	3,				# number of periods
 				'error':	0.001,
-				'type' : 'backward'			# euler scheme
+				'type' : 'forward'			# euler scheme
 	}	
 	
 	
@@ -112,7 +112,7 @@ def main():
 	start = time.time()
 	(res_Tins[:,0:sim_setup['nt_part']],
 	res_Touts[:,0:sim_setup['nt_part']],
-	res_loads[:,0:sim_setup['nt_part']]) = hybrid_model.calc_sa_sec_U_backw_load(sim_setup,
+	res_loads[:,0:sim_setup['nt_part']]) = hybrid_model.calc_sa_sec_U_forw_load(sim_setup,
 															  gMatrix,
 															  field_load[0:sim_setup['nt_part']],
 															  [M_qf[k][0:sim_setup['nt_part']] for k in range(0,nBhe)],
@@ -133,7 +133,7 @@ def main():
 		# num second part
 		(res_Tins[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']],
 		res_Touts[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']],
-		res_loads[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']]) = hybrid_model.calc_sa_sec_U_backw_load(sim_setup,
+		res_loads[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']]) = hybrid_model.calc_sa_sec_U_forw_load(sim_setup,
 															  gMatrix,
 															  field_load[p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']],
 															  [M_qf[k][p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']] for k in range(0,nBhe)],
