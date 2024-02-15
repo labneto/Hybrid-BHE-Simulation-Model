@@ -234,7 +234,7 @@ def calc_sa_sec_U_forw(sim_setup,gMatrix,T_ins,M_qf,T_borehole,BHEs,T_borehole_i
 
 	return Tf_ins,Tf_outs,loads
 
-def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tmean_out_old):
+def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,circord,T_out_old):
 	
 	'''
 	semi-analytical model for forward euler U-type BHE	
@@ -252,8 +252,10 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 	nSteps_soil = sim_setup['nt_part']								# soil steps per part
 	Sondensteps = int(sim_setup['dt_soil']/sim_setup['dt_bhe'])		# bhe steps per soil step
 	bhe_steps_inv = 1./Sondensteps
-	nBhe_inv = 1./nBhe
-
+	circ = circord[0]
+	ord = circord[1]
+	n_circ = np.count_nonzero(circ==0)+circ.max()
+	n_circ_inv = 1./n_circ
 	
 	# load Setup
 	loads = [np.zeros(nSteps_soil) for i in range(nBhe)]
@@ -261,9 +263,9 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 
 	# Results Setup	
 	Tf_outs = [np.zeros(nSteps_soil) for i in range(nBhe)]
-	Tf_ins = np.zeros(nSteps_soil)#[np.zeros(nSteps_soil) for i in range(nBhe)]
+	Tf_ins = [np.zeros(nSteps_soil) for i in range(nBhe)]
 	Tg_means = [np.zeros(nSteps_soil) for i in range(nBhe)]
-	Tf_out_mean = np.zeros(nSteps_soil)
+	T_out_toHP = np.zeros(nSteps_soil)
 	
 	# temporary variables 
 	Tf_in_ini = [np.zeros(BHEs[i].Tf_in.size) for i in range(nBhe)]
@@ -274,9 +276,18 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 	# -------------------------------------------------------------------------
 	# first step
 	# -------------------------------------------------------------------------
+
 	i = 0
-	T_in = Tmean_out_old - field_load[i]*pcV_inv
-	Tf_ins[i] = T_in
+	T_out_toHP_old = 0
+	lastBHEnlist = []
+	for m in range(0,nBhe-1):
+		if circ[m] == 0 or circ[m] != circ[m+1]:
+			T_out_toHP_old += T_out_old[m] * n_circ_inv
+			lastBHEnlist.append(m)
+	T_out_toHP_old += T_out_old[nBhe-1] * n_circ_inv
+	lastBHEnlist.append(nBhe-1)
+	T_in_fromHP = T_out_toHP_old - field_load[i]*pcV_inv
+
 	for m in range(0,nBhe):
 
 		# save current state of bhe model
@@ -284,8 +295,14 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 		Tf_out_ini[m][:] = BHEs[m].Tf_out[:]
 		Tg_in_ini[m][:] = BHEs[m].T_grout_in[:]
 		Tg_out_ini[m][:] = BHEs[m].T_grout_out[:]
-	
-		
+				
+    	# seting BHE inlet temperature
+		if ord[m] == 0:
+			T_in = T_in_fromHP
+		else:
+			T_in = T_out_old[m-1]
+		Tf_ins[m][i] = T_in
+
 		# First Guess	
 		# Calc BHE numerical
 		BHEs[m].setSoilBC(T_borehole[m][0])	
@@ -334,7 +351,8 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 			loads[m][i] = load_fg
 			Tb_guess = T_borehole[m][i] - (loads[m][i]-0) * gMatrix[m][m][0]	
 			error = np.abs((BHEs[m].getFluidOut() - Tf_out_old)/Tf_out_old)
-		Tf_out_mean[i] += nBhe_inv * Tf_outs[m][i]
+		if m in lastBHEnlist:
+			T_out_toHP[i] += Tf_outs[m][i] * n_circ_inv
 
 	
 	# Calc Soil 
@@ -352,8 +370,7 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 	# -------------------------------------------------------------------------
 	
 	for i in range(1,nSteps_soil):
-		T_in = Tf_out_mean[i-1] - field_load[i]*pcV_inv
-		Tf_ins[i] = T_in
+		T_in_fromHP = T_out_toHP[i-1] - field_load[i]*pcV_inv
 		for m in range(0,nBhe):
 			# save current state of bhe model
 			Tf_in_ini[m][:] = BHEs[m].Tf_in[:]
@@ -361,7 +378,12 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 			Tg_in_ini[m][:] = BHEs[m].T_grout_in[:]
 			Tg_out_ini[m][:] = BHEs[m].T_grout_out[:]
 		
-			
+			# seting BHE inlet temperature
+			if ord[m] == 0:
+				T_in = T_in_fromHP
+			else:
+				T_in = Tf_outs[m-1][i-1]
+			Tf_ins[m][i] = T_in
 
 			# First Guess	
 			# Calc BHE numerical
@@ -410,8 +432,9 @@ def calc_sa_sec_U_forw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,Tm
 				loads[m][i] = load_fg
 				Tb_guess = T_borehole[m][i] - (loads[m][i]-loads[m][i-1]) * gMatrix[m][m][0]	
 				error = np.abs((BHEs[m].getFluidOut() - Tf_out_old)/Tf_out_old)
-		
-			Tf_out_mean[i] += nBhe_inv * Tf_outs[m][i]
+			if m in lastBHEnlist:
+				T_out_toHP[i] += Tf_outs[m][i] * n_circ_inv
+    
 		# Calc Soil 
 		for j in range(0,nBhe):		
 			for k in range(0,nBhe):				
