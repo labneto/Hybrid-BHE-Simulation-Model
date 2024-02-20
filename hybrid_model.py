@@ -833,7 +833,7 @@ def calc_sa_sec_U_backw_load(sim_setup,gMatrix,field_load,M_qf,T_borehole,BHEs,T
 	return Tf_ins,Tf_outs,loads
 
 
-def calc_FFT_sec(gfuncs,tlog,loads,nt_future,dt,nBhe,T_undist):
+def calc_FFT_sec(gMatrix,loads,nt_future,dt,nBhe,T_undist):
 	
 	'''
 	FFT model for calculation of borehole temperatures for next period
@@ -847,7 +847,6 @@ def calc_FFT_sec(gfuncs,tlog,loads,nt_future,dt,nBhe,T_undist):
 	'''
 	
 	nsteps_total = loads[0].size + nt_future
-	Time = np.linspace(dt,nsteps_total*dt,nsteps_total)
 
 	# convert loads
 	FFT_Loads = []
@@ -858,13 +857,12 @@ def calc_FFT_sec(gfuncs,tlog,loads,nt_future,dt,nBhe,T_undist):
 		FFT_Loads.append(utilities.FourierSci(gload))
 	
 	# Temperatures at each borehole
-	T_borehole = np.ones([nBhe,Time.size])*T_undist
+	T_borehole = np.ones([nBhe,nsteps_total])*T_undist
 	for i in range(0,nBhe):			
 		for j in range(0,nBhe):
 				
 			# FFT Gfunc 
-			fG = interpolate.interp1d(tlog,gfuncs[i,j,:])
-			FFT_Gfunc = utilities.FourierSci(fG(Time))		
+			FFT_Gfunc = utilities.FourierSci(gMatrix[i,j,:])		
 		
 			# Calc Tborehole
 			T_borehole[j,:] -= np.real(utilities.invFourierSci(FFT_Loads[i]*FFT_Gfunc)) 
