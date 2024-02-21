@@ -30,12 +30,23 @@ def Fourier(a):
 def invFourier(a):
 	return np.real(np.fft.ifft(a))[0:int((a.size+1)/2)]
 	
+#### Old fft functions
 
-def FourierSci(a):
-	return fft(np.concatenate((a,np.zeros(a.size-1))))
+# def FourierSci(a):
+# 	return fft(np.concatenate((a,np.zeros(a.size-1))))
 	
+# def invFourierSci(a):
+# 	return np.real(ifft(a))[0:int((a.size+1)/2)]	
+
+def FourierSci_q(a,nBHE):
+	# return fft(np.r_[a,np.zeros([np.size(a,0)-1,nBHE])],axis=0)
+	return fft(np.concatenate([a,np.zeros([nBHE,np.size(a[0])-1])],axis=1),axis=1)
+
+def FourierSci_G(a,nBHE):
+	return fft(np.concatenate((a,np.zeros([nBHE,nBHE,np.size(a,2)-1])),axis=2),axis=2)
+
 def invFourierSci(a):
-	return np.real(ifft(a))[0:int((a.size+1)/2)]	
+    return np.real(ifft(a))[:,:,0:int((a[0,0,:].size+1)/2)]
 	
 
 def opt_nper(nt,psi_sa,psi_FFT,c_sa):

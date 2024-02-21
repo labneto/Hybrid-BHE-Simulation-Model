@@ -848,25 +848,44 @@ def calc_FFT_sec(gMatrix,loads,nt_future,dt,nBhe,T_undist):
 	
 	nsteps_total = loads[0].size + nt_future
 
-	# convert loads
-	FFT_Loads = []
-	for i in range(0,nBhe):
-		gload = np.concatenate([loads[i],np.zeros(nt_future)])		
-		gload[1:] -= np.roll(gload,1)[1:]
-		
-		FFT_Loads.append(utilities.FourierSci(gload))
+	gload = np.c_[loads,np.zeros([nBhe,nt_future])]
+	gload[:,1:] -= np.roll(gload,1,axis=1)[:,1:]
+	
+	# gload.reshape(1,nBhe,gload[0,:].size)
+	FFT_Loads = utilities.FourierSci_q(gload,nBhe)
 	
 	# Temperatures at each borehole
 	T_borehole = np.ones([nBhe,nsteps_total])*T_undist
-	for i in range(0,nBhe):			
-		for j in range(0,nBhe):
-				
-			# FFT Gfunc 
-			FFT_Gfunc = utilities.FourierSci(gMatrix[i,j,:])		
-		
-			# Calc Tborehole
-			T_borehole[j,:] -= np.real(utilities.invFourierSci(FFT_Loads[i]*FFT_Gfunc)) 
+ 
+	FFT_Gfunc = utilities.FourierSci_G(gMatrix,nBhe)
 	
+	temp = utilities.invFourierSci(FFT_Loads*FFT_Gfunc)
+	T_borehole -= np.sum(temp,axis=1)
+ 
+ ########################## Old calc_FFT_sec before implementing vectorial fft transforms
+ 
+	# nsteps_total = loads[0].size + nt_future
+
+	# convert loads
+	# FFT_Loads = []
+	# for i in range(0,nBhe):
+	# 	gload = np.concatenate([loads[i],np.zeros(nt_future)])		
+	# 	gload[1:] -= np.roll(gload,1)[1:]
+		
+	# 	FFT_Loads.append(utilities.FourierSci(gload))
+	
+	# # Temperatures at each borehole
+	# T_borehole = np.ones([nBhe,nsteps_total])*T_undist
+	# for i in range(0,nBhe):			
+	# 	for j in range(0,nBhe):
+				
+	# 		# FFT Gfunc 
+	# 		FFT_Gfunc = utilities.FourierSci(gMatrix[i,j,:])		
+		
+	# 		# Calc Tborehole
+	# 		T_borehole[j,:] -= np.real(utilities.invFourierSci(FFT_Loads[i]*FFT_Gfunc)) 
+
+
 	return T_borehole
 
 
