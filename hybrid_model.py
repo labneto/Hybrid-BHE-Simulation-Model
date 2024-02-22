@@ -14,7 +14,7 @@ import utilities
 
 
 
-def init_BHEs(nBhe,BheData,dt,nz,type):
+def init_BHEs(nBhe,BheData,dt,type):
 	'''
 	creates a list with initialized BHE classes
 	inputs:		nBhe = number of BHEs to be initialized
@@ -41,7 +41,6 @@ def init_BHEs(nBhe,BheData,dt,nz,type):
 	
 	for i in range(nBhe):		
 		BHEs[i].setTimestep(dt)
-		BHEs[i].setnz(nz)
 		BHEs[i].initialize(BheData)	
 	return BHEs
 

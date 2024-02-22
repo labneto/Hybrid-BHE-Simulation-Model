@@ -43,11 +43,11 @@ def main():
 							'Tundist': 12.0,		# [°C]		undisturbed ground temperature
 							'lm' : 2.3,				# [W/m/K]	thermal conductivity ground	
 							'Cm' : 2300000.,		# [MJ/m³/K]	volumetric heat capacity ground
+							'nz': 	5				# bhe cells vertical
 	}
 
 	
-	sim_setup = {	'nz': 	5,				# bhe cells vertical
-				'dt_bhe': 	30,				# bhe time step
+	sim_setup = {'dt_bhe': 	30,				# bhe time step
 				'dt_soil': 	30,				# soil time step
 				'nt_part':	14880,			# soil time steps per period
 				'n_parts':	3,				# number of periods
@@ -109,7 +109,7 @@ def main():
 	T_borehole = np.ones([nBhe,sim_setup['nt_part']])*BheData['Tundist']						
 	T_borehole_ini = np.ones(nBhe)*BheData['Tundist']
 	T_out_old = np.ones(nBhe)*BheData['Tundist']
-	BHEs = hybrid_model.init_BHEs(nBhe ,BheData,sim_setup['dt_bhe'],sim_setup['nz'], sim_setup['type'])
+	BHEs = hybrid_model.init_BHEs(nBhe ,BheData,sim_setup['dt_bhe'], sim_setup['type'])
 	
 	# num first part
 	start = time.time()

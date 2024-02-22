@@ -950,9 +950,6 @@ class BHE_2U_expl:
 		
 	def setTimestep(self,dt):
 		self.dt = dt	
-		
-	def setnz(self,nz):
-		self.nz = nz
 	
 	def setSoilBC(self,Tsoil):
 		self.TsA[:] = Tsoil
@@ -966,7 +963,8 @@ class BHE_2U_expl:
 	def getFluidIn(self):
 		return self.Tf_in[0]		
 		
-	def initialize(self,BheData):		
+	def initialize(self,BheData):
+		self.nz = BheData['nz']		
 		self.dz = BheData['length']/self.nz
 		self.dynviscF = BheData['dynviscF']
 		
@@ -1207,9 +1205,6 @@ class BHE_1U_expl:
 		
 	def setTimestep(self,dt):
 		self.dt = dt	
-		
-	def setnz(self,nz):
-		self.nz = nz
 	
 	def setSoilBC(self,Tsoil):
 		self.TsA[:] = Tsoil
@@ -1223,7 +1218,8 @@ class BHE_1U_expl:
 	def getFluidIn(self):
 		return self.Tf_in[0]		
 		
-	def initialize(self,BheData):		
+	def initialize(self,BheData):
+		self.nz = BheData['nz']
 		self.dz = BheData['length']/self.nz
 		self.dynviscF = BheData['dynviscF']
 		
