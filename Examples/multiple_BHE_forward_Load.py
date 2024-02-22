@@ -59,13 +59,16 @@ def main():
 	
 
 	x_pos = np.array([1,2,3,4])
-	y_pos = np.array([1,1,1,1])
+	y_pos = np.array([1,10,10,10])
+	circ = np.array([1,1,2,2])
+	ord = np.array([0,1,0,1])
+	circord = [circ,ord]
 	nBhe = x_pos.size
 	
 	#create random Tin and flow rate
 	Tin = np.ones(sim_setup['nt_part']*sim_setup['n_parts'])
 	M_Tin = [Tin*20,Tin*20,Tin*20,Tin*20,]
-	field_load = np.ones(sim_setup['nt_part']*sim_setup['n_parts'])*(-25000)
+	field_load = np.ones(sim_setup['nt_part']*sim_setup['n_parts'])*(-25000)*2
 	# field_load[0]=0
 	qf = np.ones(sim_setup['nt_part']*sim_setup['n_parts'])*BheData['Qf']
 	M_qf = [qf,qf,qf,qf]
@@ -87,12 +90,12 @@ def main():
 				   }
 	
 	# gfunc for semi-analytical model
-	tlin = np.linspace(sim_setup['dt_soil'],sim_setup['dt_soil']*sim_setup['nt_part'],sim_setup['nt_part'])	# time array soil
-	gMatrix = np.zeros([nBhe,nBhe,sim_setup['nt_part']])										# matrix with gfuncs
+	tlin = np.linspace(sim_setup['dt_soil'],sim_setup['dt_soil']*sim_setup['nt_part']*sim_setup['n_parts'],sim_setup['nt_part']*sim_setup['n_parts'])	# time array soil
+	gMatrix = np.zeros([nBhe,nBhe,sim_setup['nt_part']*sim_setup['n_parts']])
 	for i in range(0,nBhe):
 		for j in range(0,nBhe):
 			fG = interpolate.interp1d(gfunc_data['gtime'],gfunc_data['gfuncs'][i,j])
-			gMatrix[i,j,:] = fG(tlin)																# gfunc matrix interpolated to linear time grid	
+			gMatrix[i,j,:] = fG(tlin)															# gfunc matrix interpolated to linear time grid	
 	
 	# -------------------------------------------------------------------------
 	# setup for simulation
@@ -105,39 +108,38 @@ def main():
 	
 	T_borehole = np.ones([nBhe,sim_setup['nt_part']])*BheData['Tundist']						
 	T_borehole_ini = np.ones(nBhe)*BheData['Tundist']
-	Tmean_out_old = BheData['Tundist']
+	T_out_old = np.ones(nBhe)*BheData['Tundist']
 	BHEs = hybrid_model.init_BHEs(nBhe ,BheData,sim_setup['dt_bhe'],sim_setup['nz'], sim_setup['type'])
-
+	
 	# num first part
 	start = time.time()
 	(res_Tins[:,0:sim_setup['nt_part']],
 	res_Touts[:,0:sim_setup['nt_part']],
 	res_loads[:,0:sim_setup['nt_part']]) = hybrid_model.calc_sa_sec_U_forw_load(sim_setup,
-															  gMatrix,
+															  gMatrix[:,:,0:sim_setup['nt_part']],
 															  field_load[0:sim_setup['nt_part']],
 															  [M_qf[k][0:sim_setup['nt_part']] for k in range(0,nBhe)],
-															  T_borehole,BHEs,Tmean_out_old)
-	controllist = []
+															  T_borehole,BHEs,circord,T_out_old)
+
 	for p in range(1,sim_setup['n_parts']):
 			
 		# analytical firt part
-		T_borehole  = hybrid_model.calc_FFT_sec(gfunc_data['gfuncs'],
-									 gfunc_data['gtime'],
-									 res_loads[:,0:p*sim_setup['nt_part']],
+		T_borehole  = hybrid_model.calc_FFT_sec(gMatrix[:,:,0:(p+1)*sim_setup['nt_part']],
+           					 		 res_loads[:,0:p*sim_setup['nt_part']],
 									 sim_setup['nt_part'],
 									 sim_setup['dt_soil'],
 									 nBhe,BheData['Tundist'])
 		T_borehole_ini = [T_borehole[k,p*sim_setup['nt_part']-1]  for k in range(0,nBhe)]
-		Tmean_out_old = np.average(res_Touts[:,p*sim_setup['nt_part']-1])
+		T_out_old = res_Touts[:,p*sim_setup['nt_part']-1]
 		
 		# num second part
 		(res_Tins[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']],
 		res_Touts[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']],
 		res_loads[:,p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']]) = hybrid_model.calc_sa_sec_U_forw_load(sim_setup,
-															  gMatrix,
+															  gMatrix[:,:,0:sim_setup['nt_part']],
 															  field_load[p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']],
 															  [M_qf[k][p*sim_setup['nt_part']:(p+1)*sim_setup['nt_part']] for k in range(0,nBhe)],
-															  T_borehole[:,p*sim_setup['nt_part']:],BHEs,Tmean_out_old)
+															  T_borehole[:,p*sim_setup['nt_part']:],BHEs,circord,T_out_old)
 	print('time: ',time.time() - start)
 
 
@@ -145,13 +147,17 @@ def main():
 	# -------------------------------------------------------------------------
 	# plot results
 	# -------------------------------------------------------------------------
-	
+	clist=['r','b','m','c']
 	for i in range(0,nBhe):
-		plt.plot(res_Tins[i],label = 'Tin_'+str(i))
+		plt.plot(res_Tins[i],label = 'Tin_'+str(i),color=clist[i])
 		# plt.plot(M_Tin[i],label = 'Tin_'+str(i))
-		plt.plot(res_Touts[i],label = 'Tout_'+str(i))
+		plt.plot(res_Touts[i],'--',label = 'Tout_'+str(i),color=clist[i],lw=2)
 		# plt.plot(T_borehole[i],label = 'Tbore_'+str(i))
 		# plt.plot(res_loads[i],label = 'Load_'+str(i))
+	for p in range(sim_setup['n_parts']):
+		plt.vlines(p*sim_setup['nt_part'],0,40)
+		plt.vlines(p*sim_setup['nt_part']-sim_setup['dt_bhe'],0,40)
+		plt.vlines(p*sim_setup['nt_part']+sim_setup['dt_bhe'],0,40)
 	plt.legend()
 	plt.show()
 
