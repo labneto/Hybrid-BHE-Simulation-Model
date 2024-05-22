@@ -1,13 +1,11 @@
 from __future__ import division
 
 import numpy as np
-
 from scipy import integrate
 from scipy import special
-from scipy.integrate import quad
+from scipy.integrate import quad,quad_vec
 from scipy.special import erf
 from scipy.special import erfc
-
 
 
 #### Single Borehole ####
@@ -19,10 +17,38 @@ def Ils(h,d):
 	
 def g_FLSjc(x,y,ro,z,H,lm,Cm,t):
 	# Finite Line Sourve: Javed and Claesson 2011
+	# x,y = coordinates
 	Dt = lm/Cm             	 # thermal diffusivity [m2/s]
 	r = np.sqrt(x**2+y**2)   # radial distance [m]	
-	g = (1.0/4.0/np.pi/lm)*(integrate.quad(lambda s,r,H,Dt,t: np.exp(-r**2 * s**2)* Ils(H*s,1*s)/(H*s**2),1/np.sqrt(4*Dt*t),np.inf,args = (r,H,Dt,t))[0])
+	g = (1.0/4.0/np.pi/lm)*(integrate.quad_vec(lambda s: np.exp(-r**2 * s**2)* Ils(H*s,1*s)/(H*s**2),1/np.sqrt(4*Dt*t),np.inf)[0])
 	return g
+
+def g_FLSjc_(x,y,ro,z,H,lm,Cm,t):
+    
+    # FLS function from LABN
+    # Calculate alpha from Cpvs and ks internally
+    Dt = lm/Cm
+    r = np.sqrt(x**2+y**2) 
+    # Define the FLS integral function over the length of the borehole H    
+    def H_int(h):
+        # pa = np.sqrt()
+        return((erfc(np.sqrt(r**2 + (z - h)**2)/(2*np.sqrt(Dt*t)))/np.sqrt(r**2 + (z - h)**2)) - 
+                (erfc(np.sqrt(r**2 + (z + h)**2)/(2*np.sqrt(Dt*t)))/np.sqrt(r**2 + (z + h)**2)))
+
+    return ((1/(4*np.pi*lm))*quad_vec(H_int, 0, H)[0])
+
+def g_FLSjc2(x,y,ro,z,H,lm,Cm,t):
+    
+    # FLS function from LABN - integral average of the whole line
+    Dt = lm/Cm
+    r = np.sqrt(x**2+y**2) 
+    def depth_int(z):
+        H_int=(lambda h:((erfc(np.sqrt(r**2 + (z - h)**2)/(2*np.sqrt(Dt*t)))/np.sqrt(r**2 + (z - h)**2)) - 
+                (erfc(np.sqrt(r**2 + (z + h)**2)/(2*np.sqrt(Dt*t)))/np.sqrt(r**2 + (z + h)**2))))
+        return((1/(4*np.pi*lm))*quad_vec(H_int, 0, H)[0])
+        
+    
+    return(quad_vec(depth_int, 0, H)[0]/H)
 
 def g_ILS(x,y,ro,z,H,lm,Cm,t):
 	# (ILS) Infinite Line Source : Carslaw & Jaeger 1959 
